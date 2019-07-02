@@ -96,7 +96,9 @@ public class LastSeen extends JavaPlugin implements Listener, TabExecutor {
                 tellLastSeen(sender, playerName);
             }
         } else if (commandName.equals("firstseen")) {
-            msg(sender, player.getName() + " first played on " + longToDate(player.getFirstPlayed()));
+            long time = player.getFirstPlayed();
+            msg(sender, player.getName() + " first played on " +
+                longToDate(time) + " (" + longToRelativeDate(time) + ")");
         }
 
         return true;
