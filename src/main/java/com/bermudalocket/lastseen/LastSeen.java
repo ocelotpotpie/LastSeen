@@ -1,5 +1,11 @@
 package com.bermudalocket.lastseen;
 
+import java.text.SimpleDateFormat;
+import java.util.Calendar;
+import java.util.List;
+import java.util.Optional;
+import java.util.stream.Stream;
+
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.OfflinePlayer;
@@ -14,12 +20,6 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.ocpsoft.prettytime.Duration;
 import org.ocpsoft.prettytime.PrettyTime;
-
-import java.text.SimpleDateFormat;
-import java.util.Calendar;
-import java.util.List;
-import java.util.Optional;
-import java.util.stream.Stream;
 
 // ------------------------------------------------------------------------
 /**
@@ -80,7 +80,7 @@ public class LastSeen extends JavaPlugin implements Listener, TabExecutor {
         }
 
         String playerName = args[0];
-        OfflinePlayer player = (OfflinePlayer) Bukkit.getPlayer(playerName);
+        OfflinePlayer player = Bukkit.getPlayer(playerName);
         if (player == null) {
             player = getOfflinePlayerByName(playerName);
         }
@@ -134,8 +134,8 @@ public class LastSeen extends JavaPlugin implements Listener, TabExecutor {
      * @param playerName the name of the player being queried.
      */
     private OfflinePlayer getOfflinePlayerByName(String playerName) {
-        Optional<OfflinePlayer> maybePlayer = Stream.of(Bukkit.getOfflinePlayers​())
-                                                    .filter(p -> p.getName​().equals(playerName))
+        Optional<OfflinePlayer> maybePlayer = Stream.of(Bukkit.getOfflinePlayers())
+                                                    .filter(p -> p.getName().equalsIgnoreCase(playerName))
                                                     .findFirst();
         return maybePlayer.isPresent() ? maybePlayer.get() : null;
     }
@@ -175,7 +175,7 @@ public class LastSeen extends JavaPlugin implements Listener, TabExecutor {
      * @return the YAML key.
      */
     private static String getKey(String playerName) {
-        return "players." + playerName + ".last-seen";
+        return "players." + playerName.toLowerCase() + ".last-seen";
     }
 
     // ------------------------------------------------------------------------
