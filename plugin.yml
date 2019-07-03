@@ -15,3 +15,9 @@ commands:
     usage: |
 
       §e/<command> firstseen§f - Retrieve the date and time a player first logged in to the server.
+
+  date:
+    description: Show the current date and time in the server's time zone.
+    usage: |
+
+      §e/<command>§f - Show the current date and time in the server's time zone.

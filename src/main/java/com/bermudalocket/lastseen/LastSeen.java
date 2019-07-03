@@ -74,6 +74,17 @@ public class LastSeen extends JavaPlugin implements Listener, TabExecutor {
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         String commandName = command.getName().toLowerCase();
 
+        if (commandName.equals("date")) {
+            if (args.length != 0) {
+                // TODO: Actually, all of the error messages should be in red.
+                msg(sender, "Invalid extra arguments. Usage: /date");
+                return true;
+            }
+
+            msg(sender, "It is now " + longToDate(System.currentTimeMillis()) + ".");
+            return true;
+        }
+
         if (args.length != 1) {
             msg(sender, "Usage: /" + commandName + " <player-name>");
             return true;
@@ -191,6 +202,7 @@ public class LastSeen extends JavaPlugin implements Listener, TabExecutor {
         sender.sendMessage(ChatColor.GOLD + msg);
     }
 
+    // ------------------------------------------------------------------------
     /**
      * Calendar object used for converting timestamps.
      */
@@ -211,6 +223,9 @@ public class LastSeen extends JavaPlugin implements Listener, TabExecutor {
      */
     private DataStorage<Long> _storage;
 
+    /**
+     * Debug setting from the config, enables debug messages.
+     */
     private boolean _debug;
 
 }
