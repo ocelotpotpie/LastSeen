@@ -1,10 +1,10 @@
 package com.bermudalocket.lastseen;
 
-import org.bukkit.configuration.file.YamlConfiguration;
-
 import java.io.File;
 import java.io.IOException;
 import java.util.concurrent.CompletableFuture;
+
+import org.bukkit.configuration.file.YamlConfiguration;
 
 public class DataStorage<T> {
 
@@ -45,7 +45,7 @@ public class DataStorage<T> {
         if (debug) {
             return getDataDebug(key);
         }
-        return CompletableFuture.supplyAsync(() -> (T) _yaml.get(key.toLowerCase(), 0));
+        return CompletableFuture.supplyAsync(() -> (T) _yaml.get(key.toLowerCase(), 0L));
     }
 
     // ------------------------------------------------------------------------
