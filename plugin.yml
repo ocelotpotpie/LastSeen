@@ -8,13 +8,13 @@ commands:
     description: Retrieve the date and time a player was last seen.
     usage: |
 
-      §e/<command> seen§f - Retrieve the date and time a player was last seen.
+      §e/<command>§f - Retrieve the date and time a player was last seen.
 
   firstseen:
     description: Retrieve the date and time a player first logged in to the server.
     usage: |
 
-      §e/<command> firstseen§f - Retrieve the date and time a player first logged in to the server.
+      §e/<command>§f - Retrieve the date and time a player first logged in to the server.
 
   date:
     description: Show the current date and time in the server's time zone.
