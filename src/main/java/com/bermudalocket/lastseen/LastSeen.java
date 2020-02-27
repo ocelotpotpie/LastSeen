@@ -2,9 +2,8 @@ package com.bermudalocket.lastseen;
 
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
+import java.util.HashMap;
 import java.util.List;
-import java.util.Optional;
-import java.util.stream.Stream;
 
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
@@ -12,7 +11,6 @@ import org.bukkit.OfflinePlayer;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabExecutor;
-import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
@@ -21,23 +19,65 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.ocpsoft.prettytime.Duration;
 import org.ocpsoft.prettytime.PrettyTime;
 
-// ------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
 /**
  * The LastSeen plugin in its entirety, including event handlers and command
  * execution.
  */
 public class LastSeen extends JavaPlugin implements Listener, TabExecutor {
+    // ------------------------------------------------------------------------
+    /**
+     * Plugin instance as singleton.
+     */
+    public static LastSeen PLUGIN;
 
     // ------------------------------------------------------------------------
     /**
-     * @see JavaPlugin#onEnable().
+     * Return true if debug messages are logged.
+     * 
+     * @return true if debug messages are logged.
+     */
+    public boolean isDebug() {
+        return _debug;
+    }
+
+    // ------------------------------------------------------------------------
+    /**
+     * @see org.bukkit.plugin.java.JavaPlugin#onEnable()
      */
     @Override
     public void onEnable() {
+        PLUGIN = this;
         saveDefaultConfig();
         _debug = getConfig().getBoolean("debug", false);
-        _storage = new DataStorage<>("last-seen", getDataFolder().getPath());
+
+        long start = System.currentTimeMillis();
+        _storage = new DataStorage();
+        if (isDebug()) {
+            getLogger().info("YAML loading elapsed time: " + (System.currentTimeMillis() - start) + "ms");
+        }
+        start = System.currentTimeMillis();
+        for (OfflinePlayer player : Bukkit.getOfflinePlayers()) {
+            _playerCache.put(player.getName().toLowerCase(), player);
+        }
+        if (isDebug()) {
+            getLogger().info("Player caching elapsed time: " + (System.currentTimeMillis() - start) + "ms");
+        }
+
         Bukkit.getPluginManager().registerEvents(this, this);
+        Bukkit.getScheduler().scheduleSyncRepeatingTask(this, () -> {
+            _storage.save();
+        }, PERIOD, PERIOD);
+    }
+
+    // ------------------------------------------------------------------------
+    /**
+     * @see org.bukkit.plugin.java.JavaPlugin#onDisable()
+     */
+    @Override
+    public void onDisable() {
+        Bukkit.getScheduler().cancelTasks(this);
+        _storage.save();
     }
 
     // ------------------------------------------------------------------------
@@ -46,10 +86,12 @@ public class LastSeen extends JavaPlugin implements Listener, TabExecutor {
      */
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent e) {
-        Player player = e.getPlayer();
-        if (player != null) {
-            String name = player.getName();
-            _storage.setData(getKey(name), System.currentTimeMillis());
+        _storage.setLastSeen(e.getPlayer().getName(), System.currentTimeMillis());
+
+        // Add brand new players to _playerCache.
+        if (!e.getPlayer().hasPlayedBefore()) {
+            String lowerName = e.getPlayer().getName().toLowerCase();
+            _playerCache.put(lowerName, Bukkit.getOfflinePlayer(lowerName));
         }
     }
 
@@ -59,11 +101,7 @@ public class LastSeen extends JavaPlugin implements Listener, TabExecutor {
      */
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent e) {
-        Player player = e.getPlayer();
-        if (player != null) {
-            String name = player.getName();
-            _storage.setData(getKey(name), System.currentTimeMillis());
-        }
+        _storage.setLastSeen(e.getPlayer().getName(), System.currentTimeMillis());
     }
 
     // ------------------------------------------------------------------------
@@ -76,8 +114,7 @@ public class LastSeen extends JavaPlugin implements Listener, TabExecutor {
 
         if (commandName.equals("date")) {
             if (args.length != 0) {
-                // TODO: Actually, all of the error messages should be in red.
-                msg(sender, "Invalid extra arguments. Usage: /date");
+                error(sender, "Invalid extra arguments. Usage: /date");
                 return true;
             }
 
@@ -86,7 +123,7 @@ public class LastSeen extends JavaPlugin implements Listener, TabExecutor {
         }
 
         if (args.length != 1) {
-            msg(sender, "Usage: /" + commandName + " <player-name>");
+            error(sender, "Usage: /" + commandName + " <player-name>");
             return true;
         }
 
@@ -104,36 +141,21 @@ public class LastSeen extends JavaPlugin implements Listener, TabExecutor {
             if (player.isOnline()) {
                 msg(sender, player.getName() + " is online now!");
             } else {
-                tellLastSeen(sender, playerName);
+                long lastSeen = _storage.getLastSeen(playerName);
+                if (lastSeen == 0) {
+                    msg(sender, "Either that player doesn't exist or they haven't been online in a while.");
+                } else {
+                    msg(sender, player.getName() + " was last seen on " + longToDate(lastSeen) +
+                                "\n(" + longToRelativeDate(lastSeen) + ")");
+                }
             }
         } else if (commandName.equals("firstseen")) {
             long time = player.getFirstPlayed();
-            msg(sender, player.getName() + " first played on " +
-                longToDate(time) + " (" + longToRelativeDate(time) + ")");
+            msg(sender, player.getName() + " first played on " + longToDate(time) +
+                        "\n(" + longToRelativeDate(time) + ")");
         }
 
         return true;
-    }
-
-    // ------------------------------------------------------------------------
-    /**
-     * Tells the given CommandSender the last time the given OfflinePlayer was
-     * seen on the server.
-     *
-     * @param tellTo the CommandSender to send the result to.
-     * @param queriedPlayer the name of the player being queried.
-     */
-    private void tellLastSeen(CommandSender tellTo, String queriedPlayer) {
-        _storage.getData(getKey(queriedPlayer), _debug)
-                .thenAccept(timestamp -> {
-                    if (timestamp == null || timestamp == 0) {
-                        msg(tellTo, "Either that player doesn't exist or they haven't been online in a while.");
-                    } else {
-                        msg(tellTo, queriedPlayer + " was last seen on " + 
-                            longToDate(timestamp) + " (" +
-                            longToRelativeDate(timestamp) + ")");
-                    }
-                });
     }
 
     // ------------------------------------------------------------------------
@@ -142,15 +164,22 @@ public class LastSeen extends JavaPlugin implements Listener, TabExecutor {
      * list of offline players which matches the given playerName String.
      * Otherwise, returns null.
      *
+     * Bukkit.getOfflinepPlayer(String) has a couple of quirks that make it
+     * unsuitable for this purpose. Firstly, it will always return non-null for
+     * any player name whether the corresponding account exists or not.
+     * Secondly, it may issue a blocking web request to get the UUID for a given
+     * name.
+     * 
+     * Iterating over an entire collection of ~3500 OfflinePlayers takes about
+     * 40ms on the test lappy, which is an appreciable chunk of a tick, so
+     * instead we simply cache with _playerCache.
+     * 
      * @see https://hub.spigotmc.org/javadocs/spigot/org/bukkit/Bukkit.html#getOfflinePlayer-java.lang.String-
      *
      * @param playerName the name of the player being queried.
      */
     private OfflinePlayer getOfflinePlayerByName(String playerName) {
-        Optional<OfflinePlayer> maybePlayer = Stream.of(Bukkit.getOfflinePlayers())
-                                                    .filter(p -> p.getName().equalsIgnoreCase(playerName))
-                                                    .findFirst();
-        return maybePlayer.isPresent() ? maybePlayer.get() : null;
+        return _playerCache.get(playerName.toLowerCase());
     }
 
     // ------------------------------------------------------------------------
@@ -168,8 +197,8 @@ public class LastSeen extends JavaPlugin implements Listener, TabExecutor {
 
     // ------------------------------------------------------------------------
     /**
-     * Turns the given timestamp into a string describing the relative date
-     * in English to the current time now.
+     * Turns the given timestamp into a string describing the relative date in
+     * English to the current time now.
      *
      * @param time the timestamp.
      * @return a string describing the relative date.
@@ -182,18 +211,7 @@ public class LastSeen extends JavaPlugin implements Listener, TabExecutor {
 
     // ------------------------------------------------------------------------
     /**
-     * Returns the YAML key for the specified player.
-     *
-     * @param playerName the player's name.
-     * @return the YAML key.
-     */
-    private static String getKey(String playerName) {
-        return "players." + playerName.toLowerCase() + ".last-seen";
-    }
-
-    // ------------------------------------------------------------------------
-    /**
-     * Sends a colorized message to the given CommandSender.
+     * Sends a colorised message to the given CommandSender.
      *
      * @param sender the recipient.
      * @param msg the message.
@@ -203,6 +221,22 @@ public class LastSeen extends JavaPlugin implements Listener, TabExecutor {
     }
 
     // ------------------------------------------------------------------------
+    /**
+     * Sends a red error message to the given CommandSender.
+     *
+     * @param sender the recipient.
+     * @param msg the message.
+     */
+    private static void error(CommandSender sender, String msg) {
+        sender.sendMessage(ChatColor.RED + msg);
+    }
+
+    // ------------------------------------------------------------------------
+    /**
+     * Period in ticks of repeating task that initiates an async save.
+     */
+    private static final int PERIOD = 10 * 60 * 20;
+
     /**
      * Calendar object used for converting timestamps.
      */
@@ -214,14 +248,22 @@ public class LastSeen extends JavaPlugin implements Listener, TabExecutor {
     private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("E MMM d y hh:mm:ss a");
 
     /**
-     * PrettyTime instance used to convert a timestamp to a relative date string.
+     * PrettyTime instance used to convert a timestamp to a relative date
+     * string.
      */
     private static final PrettyTime PRETTY_TIME_FORMAT = new PrettyTime();
 
     /**
      * Persistent YAML storage.
      */
-    private DataStorage<Long> _storage;
+    private DataStorage _storage;
+
+    /**
+     * Cache the mapping from lowercase player name to OfflinePlayer instance
+     * rather than performing a linear search on getOfflinePlayers(), which
+     * takes about 40ms for ~3500 players on the lappy.
+     */
+    private final HashMap<String, OfflinePlayer> _playerCache = new HashMap<>();
 
     /**
      * Debug setting from the config, enables debug messages.
